@@ -1,8 +1,6 @@
 import argparse
-import functools
-import itertools
-import io
 import struct
+import sys
 
 
 import matplotlib
@@ -10,7 +8,7 @@ import matplotlib.pyplot
 import numpy
 
 
-matplotlib.use("TkCairo")
+matplotlib.use("gtk3cairo")
 
 
 def content_slice(content, descriptor):
@@ -79,13 +77,6 @@ def to_vas(v, params):
         "S": v[4] / s_pow_den if s_pow_den != 0 else 0.0,
     }
 
-    if all(map(lambda v: v == 0.0, units.values())):
-        return "disabled"
-
-    assert (
-        len(list(filter(lambda v: v != 0.0, units.values()))) == 1
-    ), f"{units} has more than 1 non-zero entry"
-
     return units
 
 
@@ -135,6 +126,9 @@ def to_table2(b, params):
     value = unpack(content_slice(b, (0x0000, 0x0007)), "d", params)
     value_mag = to_table3(content_slice(b, (0x0008, 0x000B)), params)
     value_unit = to_table4(content_slice(b, (0x000C, 0x0027)), params)
+
+    # NOTE/TODO: value_unit shows V, A, S, and the number for them is the exponent
+    #            V: 2.0 means squared volts
 
     return (value, value_mag, value_unit)
 
@@ -267,7 +261,7 @@ def v4_header(content, byte_order, endianness):
         b = content_slice(content, tup)
         params["key"] = k
 
-        if type("") == type(tup[-1]):
+        if type("") is type(tup[-1]):
             value = unpack(b, tup[-1], params)
         else:
             value = tup[-1](b, params)
@@ -285,7 +279,19 @@ def read(content, header):
     #       it subtract the "center code" which works out to be the sign bit for whatever data width
     #           f.e. 128 for 8-bit values, 32768 for 16-bit values
     #       which makes me think the values are stored in unsigned format
-    dt = numpy.dtype(numpy.uint16).newbyteorder(header["endianness"])
+    data_width = header["data_width"]
+
+    match data_width:
+        case 0:
+            base_dt = numpy.uint8
+        case 1:
+            base_dt = numpy.uint16
+        case _:
+            assert (
+                False
+            ), f"{data_width} is not 0 nor 1, you must have a $$$$ oscilloscope with $$$ ADCs"
+
+    dt = numpy.dtype(base_dt).newbyteorder(header["endianness"])
     data = numpy.frombuffer(content, dtype=dt, offset=header["data_offset_byte"])
     return data.astype(numpy.dtype("i"))
 
@@ -302,17 +308,9 @@ def v4_channel(content, header, ch_key):
 
     ch_volt_div = header[f"{ch_key}_volt_div_val"]
     ch_vert_offset = header[f"{ch_key}_vert_offset"]
-
-    # my scope is putting out f.e. 10, with magnitude 1
-    # so i assume it's 10V / division
-    # pretend that it put out 5000 1e-3
-    # multiply the value by its scale to get the V/div
+    code_per_div = header[f"{ch_key}_vert_code_per_div"]
     ch_volt_div_val = ch_volt_div[0]
     ch_vert_offset_val = ch_vert_offset[0]
-
-    code_per_div = header[f"{ch_key}_vert_code_per_div"]
-
-    ch_vert_offset = header[f"{ch_key}_vert_offset"][0]
 
     data = read(content, header)
 
@@ -320,8 +318,26 @@ def v4_channel(content, header, ch_key):
 
 
 def v4_math(content, header, ch_key):
-    # TODO: translate keys
-    return []
+    # either 7 or 15, which is the bit number of the sign bit for 8/16 bit values
+    data_width = 7 + (8 * header["data_width"])
+    # this is the sign bit for the data
+    center_code = 1 << data_width
+
+    # there is no explicit "vert_code_per_div" for math channels but i assume is's just a hardcoded number
+    # in the metadata anyway
+    ch_num = ch_key[-1]
+
+    # TODO: the scaling is bad
+    ch_volt_div = header[f"{ch_key}_vdiv_val"]
+    ch_vert_offset = header[f"{ch_key}_vpos_val"]
+    code_per_div = header[f"ch{ch_num}_vert_code_per_div"]
+    #ch_volt_div_val = ch_volt_div[0] * 1.0 if ch_volt_div[2]["V"] == 0.0 else ch_volt_div[2]["V"]
+    ch_volt_div_val = ch_volt_div[0]
+    ch_vert_offset_val = ch_vert_offset[0]
+
+    data = read(content, header)
+
+    return convert(data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val)
 
 
 def v4_digital(content, header, ch_key):
@@ -334,19 +350,19 @@ def v4(header, content, source, channel_num):
     table = {
         "ch": (f"{ch}_on", v4_channel),
         "math": (f"{ch}_switch", v4_math),
-        "d": (f"d0_d15_on", v4_digital),
+        "d": ("d0_d15_on", v4_digital),
     }
 
-    if not source in table:
+    if source not in table:
         assert False, f"{source} is not a valid v4 source"
 
     key, func = table[source]
 
     if source in ["ch", "math"]:
-        enabled = lambda: key in header and bool(header[key])
+        enabled = key in header and bool(header[key])
     else:
         # TODO: digital is untested
-        enabled = lambda: all(
+        enabled = all(
             [
                 "digital_on" in header,
                 bool(header["digital_on"]),
@@ -355,7 +371,7 @@ def v4(header, content, source, channel_num):
             ]
         )
 
-    if not enabled():
+    if not enabled:
         return []
 
     return func(content, header, ch)
@@ -414,8 +430,9 @@ def check_input_headers(args):
 def parse(args, channel_headers, math_headers, digital_headers):
     f = None
     ret = {}
+    version = channel_headers[0]["version"]
 
-    match channel_headers[0]["version"]:
+    match version:
         case 4:
             f = v4
         case _:
@@ -458,7 +475,9 @@ if __name__ == "__main__":
         default=[],
     )
 
-    args = dict(filter(lambda kv: kv[1] != None, parser.parse_args().__dict__.items()))
+    args = dict(
+        filter(lambda kv: kv[1] is not None, parser.parse_args().__dict__.items())
+    )
 
     for i, c in enumerate(args["channel_files"]):
         args["channel_files"][i] = c.read()
@@ -473,18 +492,28 @@ if __name__ == "__main__":
         args
     )
 
+    for kv in channel_headers[0].items():
+        print(kv, type(kv[1]))
+
+    #exit(0)
+
     if len(disagreements) > 0:
-        print(f"headers don't agree on {disagreements}")
+        print(f"headers don't agree on {disagreements}", file=sys.stderr)
         exit(-1)
 
     data = parse(args, channel_headers, math_headers, digital_headers)
 
-    for kv in channel_headers[0].items():
-        print(kv, type(kv[1]))
-
     fig, ax = matplotlib.pyplot.subplots()
 
+    #ax.plot(data["math1_data"])
+    #ax.plot(data["math2_data"])
+    #ax.plot(data["math3_data"])
+    #ax.plot(data["math4_data"])
     for k, v in data.items():
+        if "ch" not in k:
+            continue
+
+        print(k, len(v))
         ax.plot(v, label=k)
 
     legend = ax.legend(loc="lower right")
