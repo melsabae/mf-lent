@@ -302,11 +302,11 @@ def read(content, header):
 
     dt = numpy.dtype(base_dt).newbyteorder(header["endianness"])
     data = numpy.frombuffer(content, dtype=dt, offset=header["data_offset_byte"])
-    return data.astype(numpy.dtype("i"))
+    return data.astype(numpy.dtype("int32"))
 
 
-def convert(d, center, volt_div, code_per_div, vert_offset):
-    return (((d - center) * volt_div) / code_per_div) - vert_offset
+def convert(d, center, volt_div, code_per_div, vert_offset, probe_attenuation):
+    return ((((d - center) * volt_div) / code_per_div) - vert_offset) * probe_attenuation
 
 
 def calculate_time(num_points, time_div, grid, time_delay, sample_rate):
@@ -326,6 +326,7 @@ def v4_channel(content, header, ch_key):
     ch_volt_div = header[f"{ch_key}_volt_div_val"]
     ch_vert_offset = header[f"{ch_key}_vert_offset"]
     code_per_div = header[f"{ch_key}_vert_code_per_div"]
+    probe_attenuation = header[f"{ch_key}_probe"]
 
     ch_volt_div_val = ch_volt_div[0]
     ch_vert_offset_val = ch_vert_offset[0]
@@ -334,14 +335,14 @@ def v4_channel(content, header, ch_key):
 
     # time isn't used in sigmf
     time = []
-    #time = calculate_time(
+    # time = calculate_time(
     #    len(data),
     #    header["time_div"][0],
     #    header["Hori_div_num"],
     #    header["time_delay"][0],
     #    header["sample_rate"][0],
-    #)
-    data = convert(data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val)
+    # )
+    data = convert(data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val, probe_attenuation)
 
     return data, time
 
@@ -367,14 +368,14 @@ def v4_math(content, header, ch_key):
 
     # time isn't used in sigmf
     time = []
-    #time = calculate_time(
+    # time = calculate_time(
     #    len(data),
     #    header["time_div"][0],
     #    header["Hori_div_num"],
     #    header["time_delay"][0],
     #    header["sample_rate"][0],
-    #)
-    data = convert(data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val)
+    # )
+    data = convert(data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val, 1.0)
 
     return data, time
 
@@ -452,14 +453,16 @@ def check_input_headers(args):
     math_headers = list(map(get_header, args["math"]))
     digital_headers = list(map(get_header, args["d"]))
     disagreements = []
-    first_header = channel_headers[0]
 
-    for i, other in enumerate(channel_headers[1:], start=1):
-        for k in ["version", "byte_order", "endianness", "wave_length", "data_width"]:
-            if first_header[k] != other[k]:
-                disagreements.append(
-                    f"0[{k}] = {first_header[k]}, does not match {i}[{k}] = {other[k]}"
-                )
+    if len(channel_headers) > 0:
+        first_header = channel_headers[0]
+
+        for i, other in enumerate(channel_headers[1:], start=1):
+            for k in ["version", "byte_order", "endianness", "wave_length", "data_width"]:
+                if first_header[k] != other[k]:
+                    disagreements.append(
+                        f"0[{k}] = {first_header[k]}, does not match {i}[{k}] = {other[k]}"
+                    )
 
     # TODO: sanity check the math/digital headers too
 
@@ -469,7 +472,18 @@ def check_input_headers(args):
 def parse(args, channel_headers, math_headers, digital_headers):
     f = None
     ret = {}
-    version = channel_headers[0]["version"]
+
+    if len(channel_headers) > 0:
+        header = channel_headers[0]
+    elif len(math_headers) > 0:
+        header = math_headers[0]
+    elif len(digital_headers) > 0:
+        header = digital_headers[0]
+    else:
+        assert False, "no headers available"
+
+    version = header["version"]
+    sample_rate = header["sample_rate"][0]
 
     match version:
         case 4:
@@ -483,14 +497,14 @@ def parse(args, channel_headers, math_headers, digital_headers):
         ret[f"ch{i + 1}"] = (channel_headers[i], data, time)
 
     for i, c in enumerate(args["math"]):
-        dat, time = f(math_headers[i], c, "math", i + 1)
+        data, time = f(math_headers[i], c, "math", i + 1)
         ret[f"math{i + 1}"] = (math_headers[i], data, time)
 
     for i, c in enumerate(args["d"]):
         data, time = f(digital_headers[i], c, "d", i)
         ret[f"d{i}"] = (digital_headers[i], data, time)
 
-    return ret
+    return version, sample_rate, ret
 
 
 if __name__ == "__main__":
@@ -544,14 +558,11 @@ if __name__ == "__main__":
         args
     )
 
-    for (k, v) in channel_headers[0].items():
-        print(k, v, type(v))
-
     if len(disagreements) > 0:
         print(f"headers don't agree on {disagreements}", file=sys.stderr)
         exit(-1)
 
-    data = parse(args, channel_headers, math_headers, digital_headers)
+    version, sample_rate, data = parse(args, channel_headers, math_headers, digital_headers)
 
     # obtain output paths
     output_file = pathlib.Path(args["output_file"].name)
@@ -565,7 +576,7 @@ if __name__ == "__main__":
     offsets = dict(zip(key_list, itertools.repeat(0)))
 
     # calculate the binary file offsets per key in the keylist
-    for (i, k) in enumerate(key_list[1:], start=1):
+    for i, k in enumerate(key_list[1:], start=1):
         prior_key = key_list[i - 1]
         offsets[k] = offsets[prior_key] + len(data[prior_key][1])
 
@@ -577,11 +588,6 @@ if __name__ == "__main__":
         for i, key in enumerate(key_list):
             f.write(data[key][1].astype(output_dtype).tobytes())
 
-    # set up metadata for .sigmf-meta
-    version = channel_headers[0]["version"]
-
-    # this is almost certainly the same for all analog/math channels
-    sample_rate = channel_headers[0]["sample_rate"][0]
     recorder = f"SIGLENT v{version}"
     hardware = "SIGLENT SDS804X HD, firmware version unspecified"
 
@@ -599,7 +605,7 @@ if __name__ == "__main__":
         # in other words, they are NOT interleaved
         sigmf.SigMFFile.NUM_CHANNELS_KEY: 1,
         sigmf.SigMFFile.HW_KEY: hardware,
-        sigmf.SigMFFile.SAMPLE_RATE_KEY: sample_rate
+        sigmf.SigMFFile.SAMPLE_RATE_KEY: sample_rate,
     }
 
     meta = sigmf.SigMFFile(data_file=data_file, global_info=global_info)
@@ -611,8 +617,8 @@ if __name__ == "__main__":
             sigmf.SigMFFile.LABEL_KEY: key,
         }
 
-        meta.add_capture(offsets[key], metadata = metadata)
-        meta.add_annotation(offsets[key], len(data[key][1]), metadata = annotation)
+        meta.add_capture(offsets[key], metadata=metadata)
+        meta.add_annotation(offsets[key], len(data[key][1]), metadata=annotation)
 
     meta.tofile(meta_file)
 
