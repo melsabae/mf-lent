@@ -306,9 +306,13 @@ def read(content, header):
 
 
 def convert(d, center, volt_div, code_per_div, vert_offset, probe_attenuation):
-    return (
-        (((d - center) * volt_div) / code_per_div) - vert_offset
-    ) * probe_attenuation
+    # attempt to consolidate constants to reduce the number of calculations on the numpy array
+    return ((probe_attenuation * volt_div / code_per_div) * (d - center)) - (
+        probe_attenuation * vert_offset
+    )
+
+    # original formula
+    # return ((((d - center) * volt_div) / code_per_div) - vert_offset) * probe_attenuation
 
 
 def calculate_time(num_points, time_div, grid, time_delay, sample_rate):

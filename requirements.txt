@@ -1,4 +1,6 @@
+black==25.11.0
 matplotlib==3.10.7
 numpy==2.3.5
+ruff==0.14.8
 SigMF==1.2.12
 
