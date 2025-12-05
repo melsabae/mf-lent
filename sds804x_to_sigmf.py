@@ -507,10 +507,24 @@ def parse(args, channel_headers, math_headers, digital_headers):
     return version, sample_rate, ret
 
 
+def sigmf_file(name, mode):
+    suffix = pathlib.Path(name).suffix
+
+    # the text of the exception doesn't seem to get propagated sadly
+    if suffix not in [".sigmf-meta", ".sigmf-data"]:
+        raise ValueError(f"{name} does not end in .sigmf-meta nor .sigmf-data")
+
+    return open(name, mode="w")
+
+
+def sigmf_output_file(s):
+    return sigmf_file(s, "w")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("output_file", type=argparse.FileType(mode="w"))
+    parser.add_argument("output_file", type=sigmf_output_file)
 
     parser.add_argument(
         "--analog",
