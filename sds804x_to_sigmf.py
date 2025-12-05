@@ -518,7 +518,7 @@ def sigmf_file(name, mode):
 
 
 def sigmf_output_file(s):
-    return sigmf_file(s, "w")
+    return sigmf_file(s, "wb")
 
 
 if __name__ == "__main__":
