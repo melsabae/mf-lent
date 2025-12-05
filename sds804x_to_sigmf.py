@@ -1,4 +1,6 @@
 import argparse
+import itertools
+import pathlib
 import struct
 import sys
 
@@ -6,6 +8,7 @@ import sys
 import matplotlib
 import matplotlib.pyplot
 import numpy
+import sigmf
 
 
 # let's play the guessing game
@@ -306,8 +309,12 @@ def convert(d, center, volt_div, code_per_div, vert_offset):
     return (((d - center) * volt_div) / code_per_div) - vert_offset
 
 
-def calculate_time(d, time_div, grid, time_delay, sample_rate):
-    return -(time_div * (grid / 2.0)) - time_delay + numpy.arange(len(d)) * (1.0 / sample_rate)
+def calculate_time(num_points, time_div, grid, time_delay, sample_rate):
+    return (
+        -(time_div * (grid / 2.0))
+        - time_delay
+        + numpy.arange(num_points) * (1.0 / sample_rate)
+    )
 
 
 def v4_channel(content, header, ch_key):
@@ -323,7 +330,16 @@ def v4_channel(content, header, ch_key):
     ch_vert_offset_val = ch_vert_offset[0]
 
     data = read(content, header)
-    time = calculate_time(data, header["time_div"][0], header["Hori_div_num"], header["time_delay"][0], header["sample_rate"][0])
+
+    # time isn't used in sigmf
+    time = []
+    #time = calculate_time(
+    #    len(data),
+    #    header["time_div"][0],
+    #    header["Hori_div_num"],
+    #    header["time_delay"][0],
+    #    header["sample_rate"][0],
+    #)
     data = convert(data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val)
 
     return data, time
@@ -346,14 +362,23 @@ def v4_math(content, header, ch_key):
     ch_vert_offset_val = ch_vert_offset[0]
 
     data = read(content, header)
-    time = calculate_time(data, header["time_div"][0], header["Hori_div_num"], header["time_delay"][0], header["sample_rate"][0])
+
+    # time isn't used in sigmf
+    time = []
+    #time = calculate_time(
+    #    len(data),
+    #    header["time_div"][0],
+    #    header["Hori_div_num"],
+    #    header["time_delay"][0],
+    #    header["sample_rate"][0],
+    #)
     data = convert(data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val)
 
     return data, time
 
 
 def v4_digital(content, header, ch_key):
-    return [], []
+    return ([], [])
 
 
 def v4(header, content, source, channel_num):
@@ -384,7 +409,7 @@ def v4(header, content, source, channel_num):
         )
 
     if not enabled:
-        return []
+        return [], []
 
     return func(content, header, ch)
 
@@ -421,9 +446,9 @@ def get_header(content):
 def check_input_headers(args):
     # check that the headers for each input channel file agrees on some things
 
-    channel_headers = list(map(get_header, args["channel_files"]))
-    math_headers = list(map(get_header, args["math_function_files"]))
-    digital_headers = list(map(get_header, args["digital_channel_files"]))
+    channel_headers = list(map(get_header, args["ch"]))
+    math_headers = list(map(get_header, args["math"]))
+    digital_headers = list(map(get_header, args["d"]))
     disagreements = []
     first_header = channel_headers[0]
 
@@ -434,7 +459,7 @@ def check_input_headers(args):
                     f"0[{k}] = {first_header[k]}, does not match {i}[{k}] = {other[k]}"
                 )
 
-    # TODO: sanity check the math headers too
+    # TODO: sanity check the math/digital headers too
 
     return disagreements, channel_headers, math_headers, digital_headers
 
@@ -451,20 +476,17 @@ def parse(args, channel_headers, math_headers, digital_headers):
             assert False, f"{version} parsing not supported"
 
     # channel/math numbers are 1-indexed, digital is 0-indexed
-    for i, c in enumerate(args["channel_files"]):
+    for i, c in enumerate(args["ch"]):
         data, time = f(channel_headers[i], c, "ch", i + 1)
-        ret[f"ch{i + 1}_data"] = data
-        ret[f"ch{i + 1}_time"] = time
+        ret[f"ch{i + 1}"] = (channel_headers[i], data, time)
 
-    for i, c in enumerate(args["math_function_files"]):
+    for i, c in enumerate(args["math"]):
         dat, time = f(math_headers[i], c, "math", i + 1)
-        ret[f"math{i + 1}_data"] = data
-        ret[f"math{i + 1}_time"] = time
+        ret[f"math{i + 1}"] = (math_headers[i], data, time)
 
-    for i, c in enumerate(args["digital_channel_files"]):
+    for i, c in enumerate(args["d"]):
         data, time = f(digital_headers[i], c, "d", i)
-        ret[f"d{i}_data"] = data
-        ret[f"d{i}_data"] = time
+        ret[f"d{i}"] = (digital_headers[i], data, time)
 
     return ret
 
@@ -472,21 +494,27 @@ def parse(args, channel_headers, math_headers, digital_headers):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
+    parser.add_argument("output_file", type=argparse.FileType(mode="w"))
+
     parser.add_argument(
-        "channel_files",
+        "--analog",
+        dest="ch",
         type=argparse.FileType(mode="rb"),
         nargs="+",
-        help="input binary file(s) for channels",
+        help="input binary file(s) for analog channels",
+        default=[],
     )
     parser.add_argument(
-        "--math_function_files",
+        "--math",
+        dest="math",
         type=argparse.FileType(mode="rb"),
         nargs="+",
         help="input binary file(s) for math functions",
         default=[],
     )
     parser.add_argument(
-        "--digital_channel_files",
+        "--digital",
+        dest="d",
         type=argparse.FileType(mode="rb"),
         nargs="+",
         help="input binary file(s) for digital channels",
@@ -497,21 +525,25 @@ if __name__ == "__main__":
         filter(lambda kv: kv[1] is not None, parser.parse_args().__dict__.items())
     )
 
-    for i, c in enumerate(args["channel_files"]):
-        args["channel_files"][i] = c.read()
+    if 0 == len(args["ch"]) + len(args["math"]) + len(args["d"]):
+        print("no files to process")
+        exit(0)
 
-    for i, c in enumerate(args["math_function_files"]):
-        args["math_function_files"][i] = c.read()
+    for i, c in enumerate(args["ch"]):
+        args["ch"][i] = c.read()
 
-    for i, c in enumerate(args["digital_channel_files"]):
-        args["digital_channel_files"][i] = c.read()
+    for i, c in enumerate(args["math"]):
+        args["math"][i] = c.read()
+
+    for i, c in enumerate(args["d"]):
+        args["d"][i] = c.read()
 
     disagreements, channel_headers, math_headers, digital_headers = check_input_headers(
         args
     )
 
-    #for kv in channel_headers[0].items():
-        #print(kv, type(kv[1]))
+    for (k, v) in channel_headers[0].items():
+        print(k, v, type(v))
 
     if len(disagreements) > 0:
         print(f"headers don't agree on {disagreements}", file=sys.stderr)
@@ -519,18 +551,81 @@ if __name__ == "__main__":
 
     data = parse(args, channel_headers, math_headers, digital_headers)
 
-    fig, ax = matplotlib.pyplot.subplots()
+    # obtain output paths
+    output_file = pathlib.Path(args["output_file"].name)
+    output_dir = output_file.parents[0]
+    output_file = output_file.stem
+    data_file = output_dir.joinpath(f"{output_file}.sigmf-data").absolute()
+    meta_file = output_dir.joinpath(f"{output_file}.sigmf-meta").absolute()
 
-    for k, v in data.items():
-        if "math" in k:
-            print(k, numpy.min(v), numpy.max(v))
-        if "time" in k:
-            print(v)
-            continue
+    # don't assume the keys are sorted
+    key_list = sorted(data.keys())
+    offsets = dict(zip(key_list, itertools.repeat(0)))
 
-        print(k, len(v))
-        ax.plot(v, label=k)
+    # calculate the binary file offsets per key in the keylist
+    for (i, k) in enumerate(key_list[1:], start=1):
+        prior_key = key_list[i - 1]
+        offsets[k] = offsets[prior_key] + len(data[prior_key][1])
 
-    legend = ax.legend(loc="lower right")
-    matplotlib.pyplot.show()
+    # enforce output values are f32
+    output_dtype = numpy.dtype("f")
+
+    # create output .sigmf-data file
+    with open(data_file, "wb") as f:
+        for i, key in enumerate(key_list):
+            f.write(data[key][1].astype(output_dtype).tobytes())
+
+    # set up metadata for .sigmf-meta
+    version = channel_headers[0]["version"]
+
+    # this is almost certainl the same for all analog/math channels
+    sample_rate = channel_headers[0]["sample_rate"][0]
+    recorder = f"SIGLENT v{version}"
+    hardware = "SIGLENT SDS804X HD, firmware version unspecified"
+
+    # sample rates may vary between analog/math and digital
+    # since i dont have the digital module, im going to assume for now it runs at the same sample rate
+    # in other words, if i sample 1 channel at 2 GS/s, then digital is also 2GS/s for all 16 channels
+    # this is likely a very not good assumption
+    global_info = {
+        sigmf.SigMFFile.DATATYPE_KEY: sigmf.utils.get_data_type_str(
+            numpy.array([], dtype=output_dtype)
+        ),
+        sigmf.SigMFFile.RECORDER_KEY: recorder,
+        sigmf.SigMFFile.START_OFFSET_KEY: 0,
+        # each captured channel is a separate capture in the output file
+        # in other words, they are NOT interleaved
+        sigmf.SigMFFile.NUM_CHANNELS_KEY: 1,
+        sigmf.SigMFFile.HW_KEY: hardware,
+        sigmf.SigMFFile.SAMPLE_RATE_KEY: sample_rate
+    }
+
+    meta = sigmf.SigMFFile(data_file=data_file, global_info=global_info)
+
+    for i, key in enumerate(key_list):
+        metadata = {}
+
+        annotation = {
+            sigmf.SigMFFile.LABEL_KEY: key,
+        }
+
+        meta.add_capture(offsets[key], metadata = metadata)
+        meta.add_annotation(offsets[key], len(data[key][1]), metadata = annotation)
+
+    meta.tofile(meta_file)
+
+    # fig, ax = matplotlib.pyplot.subplots()
+
+    # for k, v in data.items():
+    #   if "math" in k:
+    #       print(k, numpy.min(v), numpy.max(v))
+    #   if "time" in k:
+    #       print(v)
+    #       continue
+
+    #   print(k, len(v))
+    #   ax.plot(v, label=k)
+
+    # legend = ax.legend(loc="lower right")
+    # matplotlib.pyplot.show()
 
