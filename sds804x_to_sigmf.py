@@ -326,6 +326,7 @@ def v4_channel(content, header, ch_key):
     ch_volt_div = header[f"{ch_key}_volt_div_val"]
     ch_vert_offset = header[f"{ch_key}_vert_offset"]
     code_per_div = header[f"{ch_key}_vert_code_per_div"]
+
     ch_volt_div_val = ch_volt_div[0]
     ch_vert_offset_val = ch_vert_offset[0]
 
@@ -353,6 +354,7 @@ def v4_math(content, header, ch_key):
 
     # there is no explicit "vert_code_per_div" for math channels but i assume is's just a hardcoded number
     # in the metadata anyway
+    # also this wouldn't handle 2 or more digits for channel numbers
     ch_num = ch_key[-1]
 
     ch_volt_div = header[f"{ch_key}_vdiv_val"]
@@ -578,7 +580,7 @@ if __name__ == "__main__":
     # set up metadata for .sigmf-meta
     version = channel_headers[0]["version"]
 
-    # this is almost certainl the same for all analog/math channels
+    # this is almost certainly the same for all analog/math channels
     sample_rate = channel_headers[0]["sample_rate"][0]
     recorder = f"SIGLENT v{version}"
     hardware = "SIGLENT SDS804X HD, firmware version unspecified"
@@ -614,18 +616,15 @@ if __name__ == "__main__":
 
     meta.tofile(meta_file)
 
-    # fig, ax = matplotlib.pyplot.subplots()
+    fig, ax = matplotlib.pyplot.subplots()
 
-    # for k, v in data.items():
-    #   if "math" in k:
-    #       print(k, numpy.min(v), numpy.max(v))
-    #   if "time" in k:
-    #       print(v)
-    #       continue
+    for k, v in data.items():
+        print(k, len(v[1]), v[0]["data_width"])
+        print(v[1])
+        print()
 
-    #   print(k, len(v))
-    #   ax.plot(v, label=k)
+        ax.plot(v[1], label=k)
 
-    # legend = ax.legend(loc="lower right")
-    # matplotlib.pyplot.show()
+    legend = ax.legend(loc="lower right")
+    matplotlib.pyplot.show()
 
