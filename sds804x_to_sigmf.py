@@ -306,6 +306,10 @@ def convert(d, center, volt_div, code_per_div, vert_offset):
     return (((d - center) * volt_div) / code_per_div) - vert_offset
 
 
+def calculate_time(d, time_div, grid, time_delay, sample_rate):
+    return -(time_div * (grid / 2.0)) - time_delay + numpy.arange(len(d)) * (1.0 / sample_rate)
+
+
 def v4_channel(content, header, ch_key):
     # either 7 or 15, which is the bit number of the sign bit for 8/16 bit values
     data_width = 7 + (8 * header["data_width"])
@@ -319,8 +323,10 @@ def v4_channel(content, header, ch_key):
     ch_vert_offset_val = ch_vert_offset[0]
 
     data = read(content, header)
+    time = calculate_time(data, header["time_div"][0], header["Hori_div_num"], header["time_delay"][0], header["sample_rate"][0])
+    data = convert(data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val)
 
-    return convert(data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val)
+    return data, time
 
 
 def v4_math(content, header, ch_key):
@@ -333,21 +339,21 @@ def v4_math(content, header, ch_key):
     # in the metadata anyway
     ch_num = ch_key[-1]
 
-    # TODO: the scaling is bad
     ch_volt_div = header[f"{ch_key}_vdiv_val"]
     ch_vert_offset = header[f"{ch_key}_vpos_val"]
     code_per_div = header[f"ch{ch_num}_vert_code_per_div"]
-    #ch_volt_div_val = ch_volt_div[0] * 1.0 if ch_volt_div[2]["V"] == 0.0 else ch_volt_div[2]["V"]
     ch_volt_div_val = ch_volt_div[0]
     ch_vert_offset_val = ch_vert_offset[0]
 
     data = read(content, header)
+    time = calculate_time(data, header["time_div"][0], header["Hori_div_num"], header["time_delay"][0], header["sample_rate"][0])
+    data = convert(data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val)
 
-    return convert(data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val)
+    return data, time
 
 
 def v4_digital(content, header, ch_key):
-    return []
+    return [], []
 
 
 def v4(header, content, source, channel_num):
@@ -446,13 +452,19 @@ def parse(args, channel_headers, math_headers, digital_headers):
 
     # channel/math numbers are 1-indexed, digital is 0-indexed
     for i, c in enumerate(args["channel_files"]):
-        ret[f"ch{i + 1}_data"] = f(channel_headers[i], c, "ch", i + 1)
+        data, time = f(channel_headers[i], c, "ch", i + 1)
+        ret[f"ch{i + 1}_data"] = data
+        ret[f"ch{i + 1}_time"] = time
 
     for i, c in enumerate(args["math_function_files"]):
-        ret[f"math{i + 1}_data"] = f(math_headers[i], c, "math", i + 1)
+        dat, time = f(math_headers[i], c, "math", i + 1)
+        ret[f"math{i + 1}_data"] = data
+        ret[f"math{i + 1}_time"] = time
 
     for i, c in enumerate(args["digital_channel_files"]):
-        ret[f"d{i}_data"] = f(digital_headers[i], c, "d", i)
+        data, time = f(digital_headers[i], c, "d", i)
+        ret[f"d{i}_data"] = data
+        ret[f"d{i}_data"] = time
 
     return ret
 
@@ -498,10 +510,8 @@ if __name__ == "__main__":
         args
     )
 
-    for kv in channel_headers[0].items():
-        print(kv, type(kv[1]))
-
-    #exit(0)
+    #for kv in channel_headers[0].items():
+        #print(kv, type(kv[1]))
 
     if len(disagreements) > 0:
         print(f"headers don't agree on {disagreements}", file=sys.stderr)
@@ -512,6 +522,12 @@ if __name__ == "__main__":
     fig, ax = matplotlib.pyplot.subplots()
 
     for k, v in data.items():
+        if "math" in k:
+            print(k, numpy.min(v), numpy.max(v))
+        if "time" in k:
+            print(v)
+            continue
+
         print(k, len(v))
         ax.plot(v, label=k)
 
