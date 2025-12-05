@@ -8,7 +8,13 @@ import matplotlib.pyplot
 import numpy
 
 
-matplotlib.use("gtk3cairo")
+# let's play the guessing game
+for b in ["GTK3Cairo", "TkCairo", "gtk3cairo"]:
+    try:
+        matplotlib.use(b)
+        break
+    except Exception as e:
+        print(e)
 
 
 def content_slice(content, descriptor):
@@ -505,14 +511,7 @@ if __name__ == "__main__":
 
     fig, ax = matplotlib.pyplot.subplots()
 
-    #ax.plot(data["math1_data"])
-    #ax.plot(data["math2_data"])
-    #ax.plot(data["math3_data"])
-    #ax.plot(data["math4_data"])
     for k, v in data.items():
-        if "ch" not in k:
-            continue
-
         print(k, len(v))
         ax.plot(v, label=k)
 
