@@ -306,7 +306,9 @@ def read(content, header):
 
 
 def convert(d, center, volt_div, code_per_div, vert_offset, probe_attenuation):
-    return ((((d - center) * volt_div) / code_per_div) - vert_offset) * probe_attenuation
+    return (
+        (((d - center) * volt_div) / code_per_div) - vert_offset
+    ) * probe_attenuation
 
 
 def calculate_time(num_points, time_div, grid, time_delay, sample_rate):
@@ -342,7 +344,14 @@ def v4_channel(content, header, ch_key):
     #    header["time_delay"][0],
     #    header["sample_rate"][0],
     # )
-    data = convert(data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val, probe_attenuation)
+    data = convert(
+        data,
+        center_code,
+        ch_volt_div_val,
+        code_per_div,
+        ch_vert_offset_val,
+        probe_attenuation,
+    )
 
     return data, time
 
@@ -375,7 +384,9 @@ def v4_math(content, header, ch_key):
     #    header["time_delay"][0],
     #    header["sample_rate"][0],
     # )
-    data = convert(data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val, 1.0)
+    data = convert(
+        data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val, 1.0
+    )
 
     return data, time
 
@@ -458,7 +469,13 @@ def check_input_headers(args):
         first_header = channel_headers[0]
 
         for i, other in enumerate(channel_headers[1:], start=1):
-            for k in ["version", "byte_order", "endianness", "wave_length", "data_width"]:
+            for k in [
+                "version",
+                "byte_order",
+                "endianness",
+                "wave_length",
+                "data_width",
+            ]:
                 if first_header[k] != other[k]:
                     disagreements.append(
                         f"0[{k}] = {first_header[k]}, does not match {i}[{k}] = {other[k]}"
@@ -576,7 +593,9 @@ if __name__ == "__main__":
         print(f"headers don't agree on {disagreements}", file=sys.stderr)
         exit(-1)
 
-    version, sample_rate, data = parse(args, channel_headers, math_headers, digital_headers)
+    version, sample_rate, data = parse(
+        args, channel_headers, math_headers, digital_headers
+    )
 
     # obtain output paths
     output_file = pathlib.Path(args["output_file"].name)
@@ -647,4 +666,3 @@ if __name__ == "__main__":
 
     legend = ax.legend(loc="lower right")
     matplotlib.pyplot.show()
-
