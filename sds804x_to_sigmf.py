@@ -542,40 +542,7 @@ def sigmf_output_file(s):
     return sigmf_file(s, "wb")
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("output_file", type=sigmf_output_file)
-
-    parser.add_argument(
-        "--analog",
-        dest="ch",
-        type=argparse.FileType(mode="rb"),
-        nargs="+",
-        help="input binary file(s) for analog channels",
-        default=[],
-    )
-    parser.add_argument(
-        "--math",
-        dest="math",
-        type=argparse.FileType(mode="rb"),
-        nargs="+",
-        help="input binary file(s) for math functions",
-        default=[],
-    )
-    parser.add_argument(
-        "--digital",
-        dest="d",
-        type=argparse.FileType(mode="rb"),
-        nargs="+",
-        help="input binary file(s) for digital channels",
-        default=[],
-    )
-
-    args = dict(
-        filter(lambda kv: kv[1] is not None, parser.parse_args().__dict__.items())
-    )
-
+def main(args):
     if 0 == len(args["ch"]) + len(args["math"]) + len(args["d"]):
         print("no files to process")
         exit(0)
@@ -670,3 +637,40 @@ if __name__ == "__main__":
 
     legend = ax.legend(loc="lower right")
     matplotlib.pyplot.show()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("output_file", type=sigmf_output_file)
+
+    parser.add_argument(
+        "--analog",
+        dest="ch",
+        type=argparse.FileType(mode="rb"),
+        nargs="+",
+        help="input binary file(s) for analog channels",
+        default=[],
+    )
+    parser.add_argument(
+        "--math",
+        dest="math",
+        type=argparse.FileType(mode="rb"),
+        nargs="+",
+        help="input binary file(s) for math functions",
+        default=[],
+    )
+    parser.add_argument(
+        "--digital",
+        dest="d",
+        type=argparse.FileType(mode="rb"),
+        nargs="+",
+        help="input binary file(s) for digital channels",
+        default=[],
+    )
+
+    args = dict(
+        filter(lambda kv: kv[1] is not None, parser.parse_args().__dict__.items())
+    )
+
+    main(args)
