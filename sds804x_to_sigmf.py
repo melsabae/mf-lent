@@ -126,7 +126,7 @@ def to_table4(b, params):
         case 12:
             return "PERCENT"
         case _:
-            assert False, "f{v} is not a valid unit mapping"
+            assert False, f"{v} is not a valid unit mapping"
 
 
 def to_table2(b, params):
@@ -674,3 +674,4 @@ if __name__ == "__main__":
     )
 
     main(args)
+

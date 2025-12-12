@@ -22,3 +22,4 @@ create a unified return value schema
 convert to pyproject.toml instead of requirements.txt
     matplotlib is a dev dependency
 
+file paths are cattywampus
