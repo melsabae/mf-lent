@@ -629,6 +629,8 @@ def main(args):
         meta.add_capture(offsets[key], metadata=metadata)
         meta.add_annotation(offsets[key], len(data[key][1]), metadata=annotation)
 
+    # i might prefer this, but you still have to manually create the data file first
+    #sigmf.archive.SigMFArchive(meta, name = "asdf.sigmf")
     meta.tofile(meta_file)
 
     fig, ax = matplotlib.pyplot.subplots()

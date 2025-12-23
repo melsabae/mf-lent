@@ -1,3 +1,4 @@
 capture
 venv
 *.sigmf-*
+*.sigmf
