@@ -340,7 +340,7 @@ def v4_channel(content, header, ch_key):
     data = read(content, header)
 
     # time isn't used in sigmf
-    time = []
+    time = numpy.ndarray((0))
     # time = calculate_time(
     #    len(data),
     #    header["time_div"][0],
@@ -380,7 +380,7 @@ def v4_math(content, header, ch_key):
     data = read(content, header)
 
     # time isn't used in sigmf
-    time = []
+    time = numpy.ndarray((0))
     # time = calculate_time(
     #    len(data),
     #    header["time_div"][0],
@@ -396,7 +396,7 @@ def v4_math(content, header, ch_key):
 
 
 def v4_digital(content, header, ch_key):
-    return ([], [])
+    return numpy.ndarray((0)), numpy.ndarray((0))
 
 
 def v4(header, content, source, channel_num):
@@ -427,7 +427,7 @@ def v4(header, content, source, channel_num):
         )
 
     if not enabled:
-        return [], []
+        return numpy.ndarray((0)), numpy.ndarray((0))
 
     return func(content, header, ch)
 
@@ -595,6 +595,7 @@ def main(args):
 
     recorder = f"SIGLENT v{version}"
     hardware = "SIGLENT SDS804X HD, firmware version unspecified"
+    extension_key = f"siglent-v{version}-headers"
 
     # sample rates may vary between analog/math and digital
     # since i dont have the digital module, im going to assume for now it runs at the same sample rate
@@ -611,12 +612,15 @@ def main(args):
         sigmf.SigMFFile.NUM_CHANNELS_KEY: 1,
         sigmf.SigMFFile.HW_KEY: hardware,
         sigmf.SigMFFile.SAMPLE_RATE_KEY: sample_rate,
+        sigmf.SigMFFile.EXTENSIONS_KEY: [
+            {"name": extension_key, "version": "0.0.1", "optional": True}
+        ],
     }
 
     meta = sigmf.SigMFFile(data_file=data_file, global_info=global_info)
 
     for i, key in enumerate(key_list):
-        metadata = {}
+        metadata = {f"{extension_key}:{key}": data[key][0]}
 
         annotation = {
             sigmf.SigMFFile.LABEL_KEY: key,
@@ -630,11 +634,11 @@ def main(args):
     fig, ax = matplotlib.pyplot.subplots()
 
     for k, v in data.items():
-        print(k, len(v[1]), v[0]["data_width"])
-        print(v[1])
-        print()
+      print(k, len(v[1]), v[0]["data_width"])
+      print(v[1])
+      print()
 
-        ax.plot(v[1], label=k)
+      ax.plot(v[1], label=k)
 
     legend = ax.legend(loc="lower right")
     matplotlib.pyplot.show()
