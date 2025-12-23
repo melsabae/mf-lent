@@ -529,13 +529,14 @@ def parse(args, channel_headers, math_headers, digital_headers):
 
 
 def sigmf_file(name, mode):
-    suffix = pathlib.Path(name).suffix
+    path = pathlib.Path(name)
+    suffix = path.suffix
 
     # the text of the exception doesn't seem to get propagated sadly
     if suffix not in [".sigmf-meta", ".sigmf-data"]:
         raise ValueError(f"{name} does not end in .sigmf-meta nor .sigmf-data")
 
-    return open(name, mode="w")
+    return open(path.absolute(), mode="w")
 
 
 def sigmf_output_file(s):
