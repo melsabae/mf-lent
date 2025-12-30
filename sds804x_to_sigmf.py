@@ -5,19 +5,34 @@ import struct
 import sys
 
 
-import matplotlib
-import matplotlib.pyplot
 import numpy
 import sigmf
 
 
-# let's play the guessing game
-for b in ["GTK3Cairo", "TkCairo", "gtk3cairo"]:
-    try:
-        matplotlib.use(b)
-        break
-    except Exception as e:
-        print(e)
+def plot_capture(data):
+    import matplotlib
+    import matplotlib.pyplot
+
+    # let's play the guessing game
+    for b in ["GTK3Cairo", "TkCairo", "gtk3cairo"]:
+        try:
+            matplotlib.use(b)
+            break
+        except Exception as e:
+            print(e)
+
+    fig, ax = matplotlib.pyplot.subplots()
+
+    for k, v in data.items():
+      print(k, len(v[1]), v[0]["data_width"])
+      print(v[1])
+      print()
+
+      ax.plot(v[1], label=k)
+
+    legend = ax.legend(loc="lower right")
+    matplotlib.pyplot.show()
+
 
 
 def content_slice(content, descriptor):
@@ -315,14 +330,6 @@ def convert(d, center, volt_div, code_per_div, vert_offset, probe_attenuation):
     # return ((((d - center) * volt_div) / code_per_div) - vert_offset) * probe_attenuation
 
 
-def calculate_time(num_points, time_div, grid, time_delay, sample_rate):
-    return (
-        -(time_div * (grid / 2.0))
-        - time_delay
-        + numpy.arange(num_points) * (1.0 / sample_rate)
-    )
-
-
 def v4_channel(content, header, ch_key):
     # either 7 or 15, which is the bit number of the sign bit for 8/16 bit values
     data_width = 7 + (8 * header["data_width"])
@@ -339,16 +346,7 @@ def v4_channel(content, header, ch_key):
 
     data = read(content, header)
 
-    # time isn't used in sigmf
-    time = numpy.ndarray((0))
-    # time = calculate_time(
-    #    len(data),
-    #    header["time_div"][0],
-    #    header["Hori_div_num"],
-    #    header["time_delay"][0],
-    #    header["sample_rate"][0],
-    # )
-    data = convert(
+    return convert(
         data,
         center_code,
         ch_volt_div_val,
@@ -356,8 +354,6 @@ def v4_channel(content, header, ch_key):
         ch_vert_offset_val,
         probe_attenuation,
     )
-
-    return data, time
 
 
 def v4_math(content, header, ch_key):
@@ -379,24 +375,13 @@ def v4_math(content, header, ch_key):
 
     data = read(content, header)
 
-    # time isn't used in sigmf
-    time = numpy.ndarray((0))
-    # time = calculate_time(
-    #    len(data),
-    #    header["time_div"][0],
-    #    header["Hori_div_num"],
-    #    header["time_delay"][0],
-    #    header["sample_rate"][0],
-    # )
-    data = convert(
+    return convert(
         data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val, 1.0
     )
 
-    return data, time
-
 
 def v4_digital(content, header, ch_key):
-    return numpy.ndarray((0)), numpy.ndarray((0))
+    return numpy.ndarray((0))
 
 
 def v4(header, content, source, channel_num):
@@ -427,7 +412,7 @@ def v4(header, content, source, channel_num):
         )
 
     if not enabled:
-        return numpy.ndarray((0)), numpy.ndarray((0))
+        return numpy.ndarray((0))
 
     return func(content, header, ch)
 
@@ -514,16 +499,16 @@ def parse(args, channel_headers, math_headers, digital_headers):
 
     # channel/math numbers are 1-indexed, digital is 0-indexed
     for i, c in enumerate(args["ch"]):
-        data, time = f(channel_headers[i], c, "ch", i + 1)
-        ret[f"ch{i + 1}"] = (channel_headers[i], data, time)
+        data = f(channel_headers[i], c, "ch", i + 1)
+        ret[f"ch{i + 1}"] = (channel_headers[i], data)
 
     for i, c in enumerate(args["math"]):
-        data, time = f(math_headers[i], c, "math", i + 1)
-        ret[f"math{i + 1}"] = (math_headers[i], data, time)
+        data = f(math_headers[i], c, "math", i + 1)
+        ret[f"math{i + 1}"] = (math_headers[i], data)
 
     for i, c in enumerate(args["d"]):
-        data, time = f(digital_headers[i], c, "d", i)
-        ret[f"d{i}"] = (digital_headers[i], data, time)
+        data = f(digital_headers[i], c, "d", i)
+        ret[f"d{i}"] = (digital_headers[i], data)
 
     return version, sample_rate, ret
 
@@ -633,18 +618,8 @@ def main(args):
     #sigmf.archive.SigMFArchive(meta, name = "asdf.sigmf")
     meta.tofile(meta_file)
 
-    fig, ax = matplotlib.pyplot.subplots()
-
-    for k, v in data.items():
-      print(k, len(v[1]), v[0]["data_width"])
-      print(v[1])
-      print()
-
-      ax.plot(v[1], label=k)
-
-    legend = ax.legend(loc="lower right")
-    matplotlib.pyplot.show()
-
+    if args["plot_capture"]:
+        plot_capture(data)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -675,6 +650,8 @@ if __name__ == "__main__":
         help="input binary file(s) for digital channels",
         default=[],
     )
+
+    parser.add_argument("--plot-capture", action=argparse.BooleanOptionalAction, help="plot converted capture")
 
     args = dict(
         filter(lambda kv: kv[1] is not None, parser.parse_args().__dict__.items())

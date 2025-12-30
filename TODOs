@@ -8,7 +8,7 @@ provide required parameter for version number, or set it to auto for versions >=
 provide optional parameters for oscilloscope model, and firmware version identifier
 
 extract generic utilities out to non-version specific utils module
-    i think the general raw -> voltage and index -> time can work between versions for the most part
+    i think the general raw -> voltage and index works between versions for the most part
     stuff like that
 extract version specific stuff into version specific module
     for example, version 4's sample rate is implied Hz
@@ -16,10 +16,19 @@ create a unified return value schema
     for example, the different versions can use different units:
         my scope's volt/div is measured in V, but in their examples, it's mV/div, so force it into V/div
         my scope reports its sample rate in Samples/s, but some models may report in MSamples/s
-        my scope reports time in Seconds, some models report microseconds
         just normalize everything to unit i guess
 
 convert to pyproject.toml instead of requirements.txt
     matplotlib is a dev dependency
 
-file paths are cattywampus
+my scope, and possibly any scope using this data format, uses index based time interpolation to reconstruct sample times
+    all the times are just offsets, which you can basically derive via BASE_TIME_SECONDS + (index / (sample rate in Samples/Second))
+    the file format encodes capture parameters as well as hardware parameters, but those are constant per index
+        time_div is the chosen horizontal scale, grid is fixed per model, and the time offset is basically a delay/offset from BASE_TIME_SECONDS anyway
+    anyway, the point here is that the time is very predictable, but that is the problem
+        for sequence/segmented capture, the sample capture time is intended to be discontinuous
+            the file format does not capture the time-offsets of the trigger or anything like that
+        so any capture using sequence/segmented captures need to have manual annotations added for time, if time is needed
+        so this is more a note that im choosing to just ignore time in these outputs, i can't automate away without requiring the user to feed in an input file describing offsets or whatever
+            that's going to need a lot more verification logic anyway
+
