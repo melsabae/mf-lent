@@ -1,0 +1,18 @@
+we all know im not gonna do these
+
+provide required parameter for version number, or set it to auto for versions >= 2
+    via SIGLENT document EN03B "How to Extract Data from the Binary File of SIGLENT Oscilloscope"
+        "Old Platform", Format V0.1, Format V0.2, and Format V1.0 do not have version information in the headers
+    version 2 and later does
+
+extract generic utilities out to non-version specific utils module
+    i think the general raw -> voltage and index works between versions for the most part
+    stuff like that
+extract version specific stuff into version specific module
+    for example, version 4's sample rate is implied Hz
+create a unified return value schema
+    for example, the different versions can use different units:
+        my scope's volt/div is measured in V, but in their examples, it's mV/div, so force it into V/div
+        my scope reports its sample rate in Samples/s, but some models may report in MSamples/s
+        just normalize everything to unit i guess
+

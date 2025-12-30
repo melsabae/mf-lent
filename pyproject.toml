@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mf-lent"
+version = "0.0.1"
+dependencies = [
+    "numpy==2.3.5",
+    "SigMF==1.2.12",
+]
+requires-python = ">= 3.11.2"
+authors = [ {name = "mohammad el-sabae", email = "mohammad.elsabae@gmail.com"} ]
+maintainers = [ {name = "mohammad el-sabae", email = "mohammad.elsabae@gmail.com"} ]
+description = "Converts SIGLENT oscilloscope binary format(s) to the SigMF format"
+readme = "README"
+license = "MF-Lent"
+license-files = ["LICENSE.*"]
+keywords = ["siglent", "binary", "converter", "sigmf"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Scientists, Engineers",
+    "Topic :: Science :: Signals",
+    "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Repository = "github.com/melsabae/mf-lent.git"
+
+[project.optional-dependencies]
+gui = [
+    "matplotlib==3.10.7",
+]
+dev = [
+    "ruff==0.14.8",
+    "black==25.11.0",
+]
+
+[project.scripts]
+mflent = "cli"
+

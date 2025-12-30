@@ -24,15 +24,14 @@ def plot_capture(data):
     fig, ax = matplotlib.pyplot.subplots()
 
     for k, v in data.items():
-      print(k, len(v[1]), v[0]["data_width"])
-      print(v[1])
-      print()
+        print(k, len(v[1]), v[0]["data_width"])
+        print(v[1])
+        print()
 
-      ax.plot(v[1], label=k)
+        ax.plot(v[1], label=k)
 
-    legend = ax.legend(loc="lower right")
+    ax.legend(loc="lower right")
     matplotlib.pyplot.show()
-
 
 
 def content_slice(content, descriptor):
@@ -578,8 +577,10 @@ def main(args):
         for i, key in enumerate(key_list):
             f.write(data[key][1].astype(output_dtype).tobytes())
 
+    oscope_model = args["oscope_model"]
+    fw_version = args["firmware"]
     recorder = f"SIGLENT v{version}"
-    hardware = "SIGLENT SDS804X HD, firmware version unspecified"
+    hardware = f"SIGLENT model {oscope_model}, firmware {fw_version}"
     extension_key = f"siglent-v{version}-headers"
 
     # sample rates may vary between analog/math and digital
@@ -615,13 +616,14 @@ def main(args):
         meta.add_annotation(offsets[key], len(data[key][1]), metadata=annotation)
 
     # i might prefer this, but you still have to manually create the data file first
-    #sigmf.archive.SigMFArchive(meta, name = "asdf.sigmf")
+    # sigmf.archive.SigMFArchive(meta, name = "asdf.sigmf")
     meta.tofile(meta_file)
 
     if args["plot_capture"]:
         plot_capture(data)
 
-if __name__ == "__main__":
+
+def cli():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("output_file", type=sigmf_output_file)
@@ -651,11 +653,28 @@ if __name__ == "__main__":
         default=[],
     )
 
-    parser.add_argument("--plot-capture", action=argparse.BooleanOptionalAction, help="plot converted capture")
+    parser.add_argument(
+        "--oscope-model", type=str, help="oscilloscope model", default="unspecified"
+    )
+    parser.add_argument(
+        "--firmware",
+        type=str,
+        help="oscilloscope firmware version",
+        default="unspecified",
+    )
+    parser.add_argument(
+        "--plot-capture",
+        action=argparse.BooleanOptionalAction,
+        help="plot converted capture",
+    )
 
     args = dict(
         filter(lambda kv: kv[1] is not None, parser.parse_args().__dict__.items())
     )
 
     main(args)
+
+
+if __name__ == "__main__":
+    cli()
 
