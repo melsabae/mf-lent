@@ -14,8 +14,8 @@ authors = [ {name = "mohammad el-sabae", email = "mohammad.elsabae@gmail.com"} ]
 maintainers = [ {name = "mohammad el-sabae", email = "mohammad.elsabae@gmail.com"} ]
 description = "Converts SIGLENT oscilloscope binary format(s) to the SigMF format"
 readme = "README"
-license = "MF-Lent"
-license-files = ["LICENSE.*"]
+license = "LicenseRef-Proprietary"
+#license-files = ["LICENSE.*"]
 keywords = ["siglent", "binary", "converter", "sigmf"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -37,5 +37,8 @@ dev = [
 ]
 
 [project.scripts]
-mflent = "cli"
+mflent = "sds800x:cli"
+
+[tool.setuptools]
+packages = ["sds800x"]
 

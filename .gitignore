@@ -2,3 +2,6 @@ capture
 venv
 *.sigmf-*
 *.sigmf
+*.egg-info
+build
+

@@ -581,7 +581,7 @@ def main(args):
     fw_version = args["firmware"]
     recorder = f"SIGLENT v{version}"
     hardware = f"SIGLENT model {oscope_model}, firmware {fw_version}"
-    extension_key = f"siglent-v{version}-headers"
+    extension_key = f"siglent-headers"
 
     # sample rates may vary between analog/math and digital
     # since i dont have the digital module, im going to assume for now it runs at the same sample rate
@@ -606,7 +606,7 @@ def main(args):
     meta = sigmf.SigMFFile(data_file=data_file, global_info=global_info)
 
     for i, key in enumerate(key_list):
-        metadata = {f"{extension_key}:{key}": data[key][0]}
+        metadata = {f"{extension_key}:{version}:{key}": data[key][0]}
 
         annotation = {
             sigmf.SigMFFile.LABEL_KEY: key,
