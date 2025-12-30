@@ -1,6 +1,6 @@
 # SIGLENT Headers v0.0.1
 
-The `siglent-headers` namespace extension adds the header metadata for SIGLENT binary captures to the SigMF format.
+The `siglent-headers` namespace extension adds the header metadata from SIGLENT binary capture files to the SigMF format. The schema for any such header metadata is version number dependent.
 
 ## 1 Global
 
