@@ -9,6 +9,54 @@ import numpy
 import sigmf
 
 
+output_dtypes = {
+    "ru8":     numpy.uint8,
+    "ri8":     numpy.int8,
+    "cu8":     numpy.dtype([("re", numpy.uint8), ("im", numpy.uint8)]),
+    "ci8":     numpy.dtype([("re", numpy.int8), ("im", numpy.int8)]),
+    "ru16_le": numpy.uint16,
+    "ri16_le": numpy.int16,
+    "cu16_le": numpy.dtype([("re", numpy.uint16), ("im", numpy.uint16)]),
+    "ci16_le": numpy.dtype([("re", numpy.int16), ("im", numpy.int16)]),
+    "ru32_le": numpy.uint32,
+    "ri32_le": numpy.int32,
+    "cu32_le": numpy.dtype([("re", numpy.uint32), ("im", numpy.uint32)]),
+    "ci32_le": numpy.dtype([("re", numpy.int32), ("im", numpy.int32)]),
+    "rf32_le": numpy.float32,
+    "rf64_le": numpy.float64,
+    "cf32_le": numpy.complex64,
+    "cf64_le": numpy.complex128,
+    "ru16_be": numpy.uint16,
+    "ri16_be": numpy.int16,
+    "cu16_be": numpy.dtype([("re", numpy.uint16), ("im", numpy.uint16)]),
+    "ci16_be": numpy.dtype([("re", numpy.int16), ("im", numpy.int16)]),
+    "ru32_be": numpy.uint32,
+    "ri32_be": numpy.int32,
+    "cu32_be": numpy.dtype([("re", numpy.uint33), ("im", numpy.uint32)]),
+    "ci32_be": numpy.dtype([("re", numpy.int32), ("im", numpy.int32)]),
+    "rf32_be": numpy.float32,
+    "rf64_be": numpy.float64,
+    "cf32_be": numpy.complex64,
+    "cf64_be": numpy.complex128,
+}
+
+
+def to_numpy_dtype(output_dtype):
+    if output_dtype not in output_dtypes:
+        assert False, f"{output_dtype} not a valid output_dtype"
+
+    t = output_dtypes[output_dtype]
+
+    if t is None:
+        assert False, f"TODO {output_dtype} not handled"
+
+    e = "=" if output_dtype.endswith("8") else output_dtype[-2:]
+
+    print(t, e)
+
+    return numpy.dtype(t).newbyteorder(e)
+
+
 def plot_capture(data):
     import matplotlib
     import matplotlib.pyplot
@@ -570,6 +618,7 @@ def main(args):
         offsets[k] = offsets[prior_key] + len(data[prior_key][1])
 
     # enforce output values are f32
+    # TODO: let the user control this, until then test all the outputs for each type look correct using plot
     output_dtype = numpy.dtype("f")
 
     # create output .sigmf-data file
