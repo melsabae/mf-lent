@@ -581,7 +581,7 @@ def main(args):
     fw_version = args["firmware"]
     recorder = f"SIGLENT v{version}"
     hardware = f"SIGLENT model {oscope_model}, firmware {fw_version}"
-    extension_key = f"siglent-headers"
+    extension_key = "siglent-headers"
 
     # sample rates may vary between analog/math and digital
     # since i dont have the digital module, im going to assume for now it runs at the same sample rate
@@ -615,7 +615,7 @@ def main(args):
         meta.add_capture(offsets[key], metadata=metadata)
         meta.add_annotation(offsets[key], len(data[key][1]), metadata=annotation)
 
-    # i might prefer this, but you still have to manually create the data file first
+    # i might prefer archives, but you still have to manually create the data file first
     # sigmf.archive.SigMFArchive(meta, name = "asdf.sigmf")
     meta.tofile(meta_file)
 
@@ -665,12 +665,11 @@ def cli():
     parser.add_argument(
         "--plot-capture",
         action=argparse.BooleanOptionalAction,
+        default=False,
         help="plot converted capture",
     )
 
-    args = dict(
-        filter(lambda kv: kv[1] is not None, parser.parse_args().__dict__.items())
-    )
+    args = parser.parse_args().__dict__
 
     main(args)
 
