@@ -9,31 +9,32 @@ import numpy
 import sigmf
 
 
+# TODO: the SigMF library doesn't like these complex types, but numpy doesn't natively support them
 output_dtypes = {
-    "ru8":     numpy.uint8,
-    "ri8":     numpy.int8,
-    "cu8":     numpy.dtype([("re", numpy.uint8), ("im", numpy.uint8)]),
-    "ci8":     numpy.dtype([("re", numpy.int8), ("im", numpy.int8)]),
+    "ru8": numpy.uint8,
+    "ri8": numpy.int8,
+    #"cu8": numpy.dtype([("re", numpy.uint8), ("im", numpy.uint8)]),
+    #"ci8": numpy.dtype([("re", numpy.int8), ("im", numpy.int8)]),
     "ru16_le": numpy.uint16,
     "ri16_le": numpy.int16,
-    "cu16_le": numpy.dtype([("re", numpy.uint16), ("im", numpy.uint16)]),
-    "ci16_le": numpy.dtype([("re", numpy.int16), ("im", numpy.int16)]),
+    #"cu16_le": numpy.dtype([("re", numpy.uint16), ("im", numpy.uint16)]),
+    #"ci16_le": numpy.dtype([("re", numpy.int16), ("im", numpy.int16)]),
     "ru32_le": numpy.uint32,
     "ri32_le": numpy.int32,
-    "cu32_le": numpy.dtype([("re", numpy.uint32), ("im", numpy.uint32)]),
-    "ci32_le": numpy.dtype([("re", numpy.int32), ("im", numpy.int32)]),
+    #"cu32_le": numpy.dtype([("re", numpy.uint32), ("im", numpy.uint32)]),
+    #"ci32_le": numpy.dtype([("re", numpy.int32), ("im", numpy.int32)]),
     "rf32_le": numpy.float32,
     "rf64_le": numpy.float64,
     "cf32_le": numpy.complex64,
     "cf64_le": numpy.complex128,
     "ru16_be": numpy.uint16,
     "ri16_be": numpy.int16,
-    "cu16_be": numpy.dtype([("re", numpy.uint16), ("im", numpy.uint16)]),
-    "ci16_be": numpy.dtype([("re", numpy.int16), ("im", numpy.int16)]),
+    #"cu16_be": numpy.dtype([("re", numpy.uint16), ("im", numpy.uint16)]),
+    #"ci16_be": numpy.dtype([("re", numpy.int16), ("im", numpy.int16)]),
     "ru32_be": numpy.uint32,
     "ri32_be": numpy.int32,
-    "cu32_be": numpy.dtype([("re", numpy.uint33), ("im", numpy.uint32)]),
-    "ci32_be": numpy.dtype([("re", numpy.int32), ("im", numpy.int32)]),
+    #"cu32_be": numpy.dtype([("re", numpy.uint32), ("im", numpy.uint32)]),
+    #"ci32_be": numpy.dtype([("re", numpy.int32), ("im", numpy.int32)]),
     "rf32_be": numpy.float32,
     "rf64_be": numpy.float64,
     "cf32_be": numpy.complex64,
@@ -46,20 +47,18 @@ def to_numpy_dtype(output_dtype):
         assert False, f"{output_dtype} not a valid output_dtype"
 
     t = output_dtypes[output_dtype]
-
-    if t is None:
-        assert False, f"TODO {output_dtype} not handled"
-
     e = "=" if output_dtype.endswith("8") else output_dtype[-2:]
-
-    print(t, e)
 
     return numpy.dtype(t).newbyteorder(e)
 
 
-def plot_capture(data):
+def plot_capture_as_type(data, dt):
     import matplotlib
     import matplotlib.pyplot
+
+    ndt = to_numpy_dtype(dt)
+
+    print(dt, ndt)
 
     # let's play the guessing game
     for b in ["GTK3Cairo", "TkCairo", "gtk3cairo"]:
@@ -72,11 +71,13 @@ def plot_capture(data):
     fig, ax = matplotlib.pyplot.subplots()
 
     for k, v in data.items():
-        print(k, len(v[1]), v[0]["data_width"])
-        print(v[1])
-        print()
-
-        ax.plot(v[1], label=k)
+        if dt.startswith("c"):
+            # TODO: plot the complex types
+            # we had to make a custom type for complex integers
+            # and numpy.abs() doesn't like it
+            continue
+        else:
+            ax.plot(v[1].astype(ndt), label=k)
 
     ax.legend(loc="lower right")
     matplotlib.pyplot.show()
@@ -617,9 +618,7 @@ def main(args):
         prior_key = key_list[i - 1]
         offsets[k] = offsets[prior_key] + len(data[prior_key][1])
 
-    # enforce output values are f32
-    # TODO: let the user control this, until then test all the outputs for each type look correct using plot
-    output_dtype = numpy.dtype("f")
+    output_dtype = to_numpy_dtype(args["output_dtype"])
 
     # create output .sigmf-data file
     with open(data_file, "wb") as f:
@@ -669,7 +668,7 @@ def main(args):
     meta.tofile(meta_file)
 
     if args["plot_capture"]:
-        plot_capture(data)
+        plot_capture_as_type(data, output_dtype)
 
 
 def cli():
@@ -716,6 +715,13 @@ def cli():
         action=argparse.BooleanOptionalAction,
         default=False,
         help="plot converted capture",
+    )
+    parser.add_argument(
+        "--output-dtype",
+        type=str,
+        choices=output_dtypes.keys(),
+        help="the output datatype to use. using any integer types (ru/ri/cu/ci) will lead to quality loss in analog captures)",
+        default="rf32_le"
     )
 
     args = parser.parse_args().__dict__
