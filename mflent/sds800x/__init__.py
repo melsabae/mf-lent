@@ -58,8 +58,6 @@ def plot_capture_as_type(data, dt):
 
     ndt = to_numpy_dtype(dt)
 
-    print(dt, ndt)
-
     # let's play the guessing game
     for b in ["GTK3Cairo", "TkCairo", "gtk3cairo"]:
         try:
@@ -343,7 +341,7 @@ def v4_header(content, byte_order, endianness):
     return ret
 
 
-def read(content, header):
+def read(header, content):
     # NOTE: the specific oscope im using has 12 bit ADCs, so im assuming that the output values are signed
     #       im also assuming the output values are sign extended too
 
@@ -351,6 +349,22 @@ def read(content, header):
     #       it subtract the "center code" which works out to be the sign bit for whatever data width
     #           f.e. 128 for 8-bit values, 32768 for 16-bit values
     #       which makes me think the values are stored in unsigned format
+
+    # TODO: no digital support since i dont have the module
+    sources = {
+        "ch1_on",
+        "ch2_on",
+        "ch3_on",
+        "ch4_on",
+        "math1_switch",
+        "math2_switch",
+        "math3_switch",
+        "math4_switch"
+    }
+
+    # find the source name that generated this file
+    source = next(itertools.dropwhile(lambda s: not bool(header[s]), sources))
+    source = str.split(source, "_")[0]
     data_width = header["data_width"]
 
     match data_width:
@@ -365,7 +379,7 @@ def read(content, header):
 
     dt = numpy.dtype(base_dt).newbyteorder(header["endianness"])
     data = numpy.frombuffer(content, dtype=dt, offset=header["data_offset_byte"])
-    return data.astype(numpy.dtype("int32"))
+    return source, data.astype(numpy.dtype("int32"))
 
 
 def convert(d, center, volt_div, code_per_div, vert_offset, probe_attenuation):
@@ -378,24 +392,22 @@ def convert(d, center, volt_div, code_per_div, vert_offset, probe_attenuation):
     # return ((((d - center) * volt_div) / code_per_div) - vert_offset) * probe_attenuation
 
 
-def v4_channel(content, header, ch_key):
+def v4_channel(header, source, wave):
     # either 7 or 15, which is the bit number of the sign bit for 8/16 bit values
     data_width = 7 + (8 * header["data_width"])
     # this is the sign bit for the data
     center_code = 1 << data_width
 
-    ch_volt_div = header[f"{ch_key}_volt_div_val"]
-    ch_vert_offset = header[f"{ch_key}_vert_offset"]
-    code_per_div = header[f"{ch_key}_vert_code_per_div"]
-    probe_attenuation = header[f"{ch_key}_probe"]
+    ch_volt_div = header[f"{source}_volt_div_val"]
+    ch_vert_offset = header[f"{source}_vert_offset"]
+    code_per_div = header[f"{source}_vert_code_per_div"]
+    probe_attenuation = header[f"{source}_probe"]
 
     ch_volt_div_val = ch_volt_div[0]
     ch_vert_offset_val = ch_vert_offset[0]
 
-    data = read(content, header)
-
     return convert(
-        data,
+        wave,
         center_code,
         ch_volt_div_val,
         code_per_div,
@@ -404,7 +416,7 @@ def v4_channel(content, header, ch_key):
     )
 
 
-def v4_math(content, header, ch_key):
+def v4_math(header, source, wave):
     # either 7 or 15, which is the bit number of the sign bit for 8/16 bit values
     data_width = 7 + (8 * header["data_width"])
     # this is the sign bit for the data
@@ -413,56 +425,21 @@ def v4_math(content, header, ch_key):
     # there is no explicit "vert_code_per_div" for math channels but i assume is's just a hardcoded number
     # in the metadata anyway
     # also this wouldn't handle 2 or more digits for channel numbers
-    ch_num = ch_key[-1]
+    ch_num = source[-1]
 
-    ch_volt_div = header[f"{ch_key}_vdiv_val"]
-    ch_vert_offset = header[f"{ch_key}_vpos_val"]
+    ch_volt_div = header[f"{source}_vdiv_val"]
+    ch_vert_offset = header[f"{source}_vpos_val"]
     code_per_div = header[f"ch{ch_num}_vert_code_per_div"]
     ch_volt_div_val = ch_volt_div[0]
     ch_vert_offset_val = ch_vert_offset[0]
 
-    data = read(content, header)
-
     return convert(
-        data, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val, 1.0
+        wave, center_code, ch_volt_div_val, code_per_div, ch_vert_offset_val, 1.0
     )
 
 
-def v4_digital(content, header, ch_key):
+def v4_digital(header, source, wave):
     return numpy.ndarray((0))
-
-
-def v4(header, content, source, channel_num):
-    ch = f"{source}{channel_num}"
-
-    table = {
-        "ch": (f"{ch}_on", v4_channel),
-        "math": (f"{ch}_switch", v4_math),
-        "d": ("d0_d15_on", v4_digital),
-    }
-
-    if source not in table:
-        assert False, f"{source} is not a valid v4 source"
-
-    key, func = table[source]
-
-    if source in ["ch", "math"]:
-        enabled = key in header and bool(header[key])
-    else:
-        # TODO: digital is untested
-        enabled = all(
-            [
-                "digital_on" in header,
-                bool(header["digital_on"]),
-                "d0_d15_on" in header,
-                bool(header["d0_d15_on"][channel_num]),
-            ]
-        )
-
-    if not enabled:
-        return numpy.ndarray((0))
-
-    return func(content, header, ch)
 
 
 def get_header(content):
@@ -487,76 +464,55 @@ def get_header(content):
             # it's possible that parsing this is version dependent too
             endianness = "<" if byte_order == 0 else ">"
 
-            return v4_header(content, byte_order, endianness)
+            header = v4_header(content, byte_order, endianness)
         case _:
             assert False, f"version {version} parsing not implemented"
 
-    return version, byte_order, endianness
+    return version, byte_order, endianness, header
 
 
 def check_input_headers(args):
-    # check that the headers for each input channel file agrees on some things
-
-    channel_headers = list(map(get_header, args["ch"]))
-    math_headers = list(map(get_header, args["math"]))
-    digital_headers = list(map(get_header, args["d"]))
+    version = 0
+    byte_order = 0
+    endianness = "<"
+    tuples = list(map(get_header, args["input_files"]))
+    version, byte_order, endianness, first_header = tuples[0]
+    data_width = first_header["data_width"]
     disagreements = []
 
-    if len(channel_headers) > 0:
-        first_header = channel_headers[0]
+    for (i, (v, b, e, h)) in enumerate(tuples[1:], start = 1):
+        dw = h["data_width"]
 
-        for i, other in enumerate(channel_headers[1:], start=1):
-            for k in [
-                "version",
-                "byte_order",
-                "endianness",
-                "wave_length",
-                "data_width",
-            ]:
-                if first_header[k] != other[k]:
-                    disagreements.append(
-                        f"0[{k}] = {first_header[k]}, does not match {i}[{k}] = {other[k]}"
-                    )
+        if v != version:
+            disagreements.append(f"input file {i} has version {v}, but input file [0] has version {version}")
+        if b != byte_order:
+            disagreements.append(f"input file {i} has byte order {b}, but input file [0] has byte order {byte_order}")
 
-    # TODO: sanity check the math/digital headers too
+        # endianness is derived from byte_order
 
-    return disagreements, channel_headers, math_headers, digital_headers
+        if dw != data_width:
+            disagreements.append(f"input file {i} has data width {dw}, but input file [0] has data width {data_width}")
+
+    return disagreements, list(map(lambda t: t[-1], tuples))
 
 
-def parse(args, channel_headers, math_headers, digital_headers):
-    f = None
+def parse(args, headers):
+    version = headers[0]["version"]
+    sample_rate = headers[0]["sample_rate"][0]
+    waves = list(map(lambda _: [], headers))
     ret = {}
 
-    if len(channel_headers) > 0:
-        header = channel_headers[0]
-    elif len(math_headers) > 0:
-        header = math_headers[0]
-    elif len(digital_headers) > 0:
-        header = digital_headers[0]
-    else:
-        assert False, "no headers available"
+    for (i, (h, o)) in enumerate(zip(headers, args["input_files"])):
+        source, waves[i] = read(h, o)
 
-    version = header["version"]
-    sample_rate = header["sample_rate"][0]
+        if source.startswith("ch"):
+            data = v4_channel(h, source, waves[i])
+        elif source.startswith("math"):
+            data = v4_math(h, source, waves[i])
+        else:
+            assert False, f"digital channel {source} not supported"
 
-    match version:
-        case 4:
-            f = v4
-        case _:
-            assert False, f"{version} parsing not supported"
-
-    # channel/math numbers are 1-indexed, digital is 0-indexed
-    for i, c in enumerate(args["ch"]):
-        data = f(channel_headers[i], c, "ch", i + 1)
-        ret[f"ch{i + 1}"] = (channel_headers[i], data)
-
-    for i, c in enumerate(args["math"]):
-        data = f(math_headers[i], c, "math", i + 1)
-        ret[f"math{i + 1}"] = (math_headers[i], data)
-
-    for i, c in enumerate(args["d"]):
-        data = f(digital_headers[i], c, "d", i)
-        ret[f"d{i}"] = (digital_headers[i], data)
+        ret[source] = (h, data)
 
     return version, sample_rate, ret
 
@@ -577,30 +533,17 @@ def sigmf_output_file(s):
 
 
 def main(args):
-    if 0 == len(args["ch"]) + len(args["math"]) + len(args["d"]):
-        print("no files to process")
-        exit(0)
+    for (i, o) in enumerate(args["input_files"]):
+        args["input_files"][i] = o.read()
 
-    for i, c in enumerate(args["ch"]):
-        args["ch"][i] = c.read()
-
-    for i, c in enumerate(args["math"]):
-        args["math"][i] = c.read()
-
-    for i, c in enumerate(args["d"]):
-        args["d"][i] = c.read()
-
-    disagreements, channel_headers, math_headers, digital_headers = check_input_headers(
-        args
-    )
+    disagreements, headers = check_input_headers(args)
 
     if len(disagreements) > 0:
-        print(f"headers don't agree on {disagreements}", file=sys.stderr)
+        d = "\n\t{}".format("\n\t".join(disagreements))
+        print(f"headers don't agree on: {d}", file=sys.stderr)
         exit(-1)
 
-    version, sample_rate, data = parse(
-        args, channel_headers, math_headers, digital_headers
-    )
+    version, sample_rate, data = parse(args, headers)
 
     # obtain output paths
     output_file = pathlib.Path(args["output_file"].name)
@@ -618,12 +561,13 @@ def main(args):
         prior_key = key_list[i - 1]
         offsets[k] = offsets[prior_key] + len(data[prior_key][1])
 
-    output_dtype = to_numpy_dtype(args["output_dtype"])
+    output_dtype = args["output_dtype"]
+    numpy_type = to_numpy_dtype(output_dtype)
 
     # create output .sigmf-data file
     with open(data_file, "wb") as f:
         for i, key in enumerate(key_list):
-            f.write(data[key][1].astype(output_dtype).tobytes())
+            f.write(data[key][1].astype(numpy_type).tobytes())
 
     oscope_model = args["oscope_model"]
     fw_version = args["firmware"]
@@ -637,7 +581,7 @@ def main(args):
     # this is likely a very not good assumption
     global_info = {
         sigmf.SigMFFile.DATATYPE_KEY: sigmf.utils.get_data_type_str(
-            numpy.array([], dtype=output_dtype)
+            numpy.array([], dtype=numpy_type)
         ),
         sigmf.SigMFFile.RECORDER_KEY: recorder,
         sigmf.SigMFFile.START_OFFSET_KEY: 0,
@@ -676,28 +620,8 @@ def cli():
 
     parser.add_argument("output_file", type=sigmf_output_file)
 
-    parser.add_argument(
-        "--analog",
-        dest="ch",
-        type=argparse.FileType(mode="rb"),
-        nargs="+",
+    parser.add_argument("input_files", type=argparse.FileType(mode="rb"), nargs="+",
         help="input binary file(s) for analog channels",
-        default=[],
-    )
-    parser.add_argument(
-        "--math",
-        dest="math",
-        type=argparse.FileType(mode="rb"),
-        nargs="+",
-        help="input binary file(s) for math functions",
-        default=[],
-    )
-    parser.add_argument(
-        "--digital",
-        dest="d",
-        type=argparse.FileType(mode="rb"),
-        nargs="+",
-        help="input binary file(s) for digital channels",
         default=[],
     )
 
@@ -720,7 +644,7 @@ def cli():
         "--output-dtype",
         type=str,
         choices=output_dtypes.keys(),
-        help="the output datatype to use. using any integer types (ru/ri/cu/ci) will lead to quality loss in analog captures)",
+        help="the output datatype to use. using any integer types (ru/ri/cu/ci) will lead to quality loss in analog captures",
         default="rf32_le"
     )
 
