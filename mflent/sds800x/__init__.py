@@ -13,28 +13,28 @@ import sigmf
 output_dtypes = {
     "ru8": numpy.uint8,
     "ri8": numpy.int8,
-    #"cu8": numpy.dtype([("re", numpy.uint8), ("im", numpy.uint8)]),
-    #"ci8": numpy.dtype([("re", numpy.int8), ("im", numpy.int8)]),
+    # "cu8": numpy.dtype([("re", numpy.uint8), ("im", numpy.uint8)]),
+    # "ci8": numpy.dtype([("re", numpy.int8), ("im", numpy.int8)]),
     "ru16_le": numpy.uint16,
     "ri16_le": numpy.int16,
-    #"cu16_le": numpy.dtype([("re", numpy.uint16), ("im", numpy.uint16)]),
-    #"ci16_le": numpy.dtype([("re", numpy.int16), ("im", numpy.int16)]),
+    # "cu16_le": numpy.dtype([("re", numpy.uint16), ("im", numpy.uint16)]),
+    # "ci16_le": numpy.dtype([("re", numpy.int16), ("im", numpy.int16)]),
     "ru32_le": numpy.uint32,
     "ri32_le": numpy.int32,
-    #"cu32_le": numpy.dtype([("re", numpy.uint32), ("im", numpy.uint32)]),
-    #"ci32_le": numpy.dtype([("re", numpy.int32), ("im", numpy.int32)]),
+    # "cu32_le": numpy.dtype([("re", numpy.uint32), ("im", numpy.uint32)]),
+    # "ci32_le": numpy.dtype([("re", numpy.int32), ("im", numpy.int32)]),
     "rf32_le": numpy.float32,
     "rf64_le": numpy.float64,
     "cf32_le": numpy.complex64,
     "cf64_le": numpy.complex128,
     "ru16_be": numpy.uint16,
     "ri16_be": numpy.int16,
-    #"cu16_be": numpy.dtype([("re", numpy.uint16), ("im", numpy.uint16)]),
-    #"ci16_be": numpy.dtype([("re", numpy.int16), ("im", numpy.int16)]),
+    # "cu16_be": numpy.dtype([("re", numpy.uint16), ("im", numpy.uint16)]),
+    # "ci16_be": numpy.dtype([("re", numpy.int16), ("im", numpy.int16)]),
     "ru32_be": numpy.uint32,
     "ri32_be": numpy.int32,
-    #"cu32_be": numpy.dtype([("re", numpy.uint32), ("im", numpy.uint32)]),
-    #"ci32_be": numpy.dtype([("re", numpy.int32), ("im", numpy.int32)]),
+    # "cu32_be": numpy.dtype([("re", numpy.uint32), ("im", numpy.uint32)]),
+    # "ci32_be": numpy.dtype([("re", numpy.int32), ("im", numpy.int32)]),
     "rf32_be": numpy.float32,
     "rf64_be": numpy.float64,
     "cf32_be": numpy.complex64,
@@ -359,7 +359,7 @@ def read(header, content):
         "math1_switch",
         "math2_switch",
         "math3_switch",
-        "math4_switch"
+        "math4_switch",
     }
 
     # find the source name that generated this file
@@ -438,10 +438,6 @@ def v4_math(header, source, wave):
     )
 
 
-def v4_digital(header, source, wave):
-    return numpy.ndarray((0))
-
-
 def get_header(content):
     params = {"endianness": "<"}
     version = unpack(content_slice(content, (0, 4 - 1)), "i", params)
@@ -480,18 +476,24 @@ def check_input_headers(args):
     data_width = first_header["data_width"]
     disagreements = []
 
-    for (i, (v, b, e, h)) in enumerate(tuples[1:], start = 1):
+    for i, (v, b, e, h) in enumerate(tuples[1:], start=1):
         dw = h["data_width"]
 
         if v != version:
-            disagreements.append(f"input file {i} has version {v}, but input file [0] has version {version}")
+            disagreements.append(
+                f"input file {i} has version {v}, but input file [0] has version {version}"
+            )
         if b != byte_order:
-            disagreements.append(f"input file {i} has byte order {b}, but input file [0] has byte order {byte_order}")
+            disagreements.append(
+                f"input file {i} has byte order {b}, but input file [0] has byte order {byte_order}"
+            )
 
         # endianness is derived from byte_order
 
         if dw != data_width:
-            disagreements.append(f"input file {i} has data width {dw}, but input file [0] has data width {data_width}")
+            disagreements.append(
+                f"input file {i} has data width {dw}, but input file [0] has data width {data_width}"
+            )
 
     return disagreements, list(map(lambda t: t[-1], tuples))
 
@@ -502,7 +504,7 @@ def parse(args, headers):
     waves = list(map(lambda _: [], headers))
     ret = {}
 
-    for (i, (h, o)) in enumerate(zip(headers, args["input_files"])):
+    for i, (h, o) in enumerate(zip(headers, args["input_files"])):
         source, waves[i] = read(h, o)
 
         if source.startswith("ch"):
@@ -533,7 +535,7 @@ def sigmf_output_file(s):
 
 
 def main(args):
-    for (i, o) in enumerate(args["input_files"]):
+    for i, o in enumerate(args["input_files"]):
         args["input_files"][i] = o.read()
 
     disagreements, headers = check_input_headers(args)
@@ -620,7 +622,10 @@ def cli():
 
     parser.add_argument("output_file", type=sigmf_output_file)
 
-    parser.add_argument("input_files", type=argparse.FileType(mode="rb"), nargs="+",
+    parser.add_argument(
+        "input_files",
+        type=argparse.FileType(mode="rb"),
+        nargs="+",
         help="input binary file(s) for analog channels",
         default=[],
     )
@@ -645,7 +650,7 @@ def cli():
         type=str,
         choices=output_dtypes.keys(),
         help="the output datatype to use. using any integer types (ru/ri/cu/ci) will lead to quality loss in analog captures",
-        default="rf32_le"
+        default="rf32_le",
     )
 
     args = parser.parse_args().__dict__
