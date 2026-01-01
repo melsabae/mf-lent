@@ -584,7 +584,7 @@ def cli():
     #parser.add_argument("output_file", type=str, help="the output sigmf file to generate")
 
     #args = parser.parse_args().__dict__
-    args = { "ch": [ open(sys.argv[1], "rb") ], "math": [], "d": []}
+    #args = { "ch": [ open(sys.argv[1], "rb") ], "math": [], "d": []}
 
     # TODO: i dont have a 2000X-E capture
     #args["model"] = "SDS1000X-E"
