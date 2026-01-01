@@ -37,8 +37,8 @@ dev = [
 ]
 
 [project.scripts]
-mflent = "sds800x:cli"
+mflent = "mflent:cli"
 
 [tool.setuptools]
-packages = ["sds800x"]
+packages = ["mflent", "mflent.sds800x"]
 
