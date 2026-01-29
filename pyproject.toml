@@ -8,6 +8,8 @@ version = "0.0.1"
 dependencies = [
     "numpy==2.3.5",
     "SigMF==1.2.12",
+    "configargparse==1.7.1",
+    "rich-argparse==1.7.2",
 ]
 requires-python = ">= 3.11.2"
 authors = [ {name = "mohammad el-sabae", email = "mohammad.elsabae@gmail.com"} ]

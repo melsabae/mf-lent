@@ -1,4 +1,5 @@
-import argparse
+import configargparse
+import rich_argparse
 import itertools
 import pathlib
 import struct
@@ -519,19 +520,20 @@ def parse(args, headers):
     return version, sample_rate, ret
 
 
-def sigmf_file(name, mode):
-    path = pathlib.Path(name)
-    suffix = path.suffix
+def sigmf_file_pair(name):
+    suffixes = [".sigmf-meta", ".sigmf-data", ".sigmf"]
+    output_file = pathlib.Path(name)
 
     # the text of the exception doesn't seem to get propagated sadly
-    if suffix not in [".sigmf-meta", ".sigmf-data"]:
-        raise ValueError(f"{name} does not end in .sigmf-meta nor .sigmf-data")
+    if output_file.suffix not in suffixes:
+        raise Exception(f"{name} does not end in one of {suffixes}")
 
-    return open(path.absolute(), mode="w")
+    output_dir = output_file.parents[0]
+    output_file = output_file.stem
+    data_file = output_dir.joinpath(f"{output_file}.sigmf-data").absolute()
+    meta_file = output_dir.joinpath(f"{output_file}.sigmf-meta").absolute()
 
-
-def sigmf_output_file(s):
-    return sigmf_file(s, "wb")
+    return meta_file, data_file
 
 
 def main(args):
@@ -548,11 +550,7 @@ def main(args):
     version, sample_rate, data = parse(args, headers)
 
     # obtain output paths
-    output_file = pathlib.Path(args["output_file"].name)
-    output_dir = output_file.parents[0]
-    output_file = output_file.stem
-    data_file = output_dir.joinpath(f"{output_file}.sigmf-data").absolute()
-    meta_file = output_dir.joinpath(f"{output_file}.sigmf-meta").absolute()
+    meta_file, data_file = args["output_file"]
 
     # don't assume the keys are sorted
     key_list = sorted(data.keys())
@@ -609,8 +607,6 @@ def main(args):
         meta.add_capture(offsets[key], metadata=metadata)
         meta.add_annotation(offsets[key], len(data[key][1]), metadata=annotation)
 
-    # i might prefer archives, but you still have to manually create the data file first
-    # sigmf.archive.SigMFArchive(meta, name = "asdf.sigmf")
     meta.tofile(meta_file)
 
     if args["plot_capture"]:
@@ -618,20 +614,33 @@ def main(args):
 
 
 def cli():
-    parser = argparse.ArgumentParser()
+    formatter = rich_argparse.ArgumentDefaultsRichHelpFormatter
 
-    parser.add_argument("output_file", type=sigmf_output_file)
+    parser = configargparse.ArgumentParser(formatter_class=formatter)
 
     parser.add_argument(
-        "input_files",
-        type=argparse.FileType(mode="rb"),
-        nargs="+",
-        help="input binary file(s) for analog channels",
-        default=[],
+        "-c",
+        "--config",
+        is_config_file=True,
+        env_var="MFLENT_CONFIG_FILE_PATH",
+        help="the config file path can be provided with env key MFLENT_CONFIG_FILE_PATH",
     )
 
     parser.add_argument(
-        "--oscope-model", type=str, help="oscilloscope model", default="unspecified"
+        "--input_bin_version",
+        type=str,
+        required=True,
+        choices=["v0", "v0.1", "v0.2", "v1.0", "v2+"],
+        help="""the binary version of the input files.
+        versions 2 or later (v2+) can be autodetected from the file itself.
+        works best with --oscope_model, since parsing specific versions can be conflated with specific hardware. thank SIGLENT for this""",
+    )
+
+    parser.add_argument(
+        "--oscope_model",
+        type=str,
+        help="oscilloscope model name",
+        default="unspecified",
     )
     parser.add_argument(
         "--firmware",
@@ -640,17 +649,31 @@ def cli():
         default="unspecified",
     )
     parser.add_argument(
-        "--plot-capture",
-        action=argparse.BooleanOptionalAction,
+        "--plot_capture",
+        action="store_true",
         default=False,
         help="plot converted capture",
     )
     parser.add_argument(
-        "--output-dtype",
+        "--output_dtype",
         type=str,
         choices=output_dtypes.keys(),
-        help="the output datatype to use. using any integer types (ru/ri/cu/ci) will lead to quality loss in analog captures",
         default="rf32_le",
+        help="""the output datatype to use.
+        using any integer types (ru/ri/cu/ci) will lead to quality loss in analog captures. TODO: does not support complex types""",
+    )
+
+    parser.add_argument(
+        "output_file",
+        type=sigmf_file_pair,
+        help="the path to where the output .sigmf-meta and .sigmf-data should be saved",
+    )
+
+    parser.add_argument(
+        "input_files",
+        type=configargparse.FileType(mode="rb"),
+        nargs="+",
+        help="input SIGLENT binary file(s) for channels",
     )
 
     args = parser.parse_args().__dict__
